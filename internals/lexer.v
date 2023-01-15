@@ -103,7 +103,7 @@ pub fn (mut l Lexer) get() Token {
 		} else {
 			start := l.pos
 			l1 := l.src[l.pos + 1] or { 0 }
-			l2 := l.src[l.pos + 2] or { 0 }
+			// l2 := l.src[l.pos + 2] or { 0 }
 
 			l.pos++
 
@@ -126,7 +126,7 @@ pub fn (mut l Lexer) get() Token {
 				`<` { if l1 == `=` { l.pos++ Kind.lte   } else { Kind.lt     } }
 				`&` { if l1 == `&` { l.pos++ Kind.l_and } else { Kind.l_and  } }
 				`|` { if l1 == `|` { l.pos++ Kind.l_or  } else { Kind.b_or   } }
-				`.` { if l1 == `.` { l.pos++ if l2 == `=` { l.pos++ Kind.range_inc } else { Kind.range } } else { Kind.dot } }
+				`.` { /* if l1 == `.` { l.pos++ if l2 == `=` { l.pos++ Kind.range_inc } else { Kind.range } } else { */ Kind.dot /* } */ }
 				`~` { Kind.b_not }
 				`^` { Kind.b_xor }
 				else {

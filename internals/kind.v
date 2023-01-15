@@ -37,10 +37,10 @@ pub enum Kind {
 	l_not     // !
 	b_and     // &
 	b_or      // |
-	b_not     // ~
 	b_xor     // ^
-	range     // ..
-	range_inc // ..=
+	b_not     // ~
+//	range     // ..
+//	range_inc // ..=
 	or_unwrap // or
 	dot       // .
 
@@ -51,10 +51,12 @@ pub enum Kind {
 	eof
 }
 
+// 2 | 2 == 2
+
 enum Precedence as u8 {
 	lowest
 	assign   // = += -= *= /= %=
-	range    // .. ..=
+//	range    // .. ..=
 	l_or     // ||
 	l_and    // &&
 	eq       // == != < <= > >=
@@ -72,7 +74,7 @@ enum Precedence as u8 {
 fn (kind Kind) precedence() u8 {
 	v := match kind {
 		.assign, .a_add, .a_sub, .a_mul, .a_mod { Precedence.assign }
-		.range, .range_inc { Precedence.range }
+	//	.range, .range_inc { Precedence.range }
 		.l_or { Precedence.l_or }
 		.l_and { Precedence.l_and }
 		.eq, .neq, .gt, .gte, .lt, .lte { Precedence.eq }
@@ -88,4 +90,57 @@ fn (kind Kind) precedence() u8 {
 	}
 	
 	return u8(v)
+}
+
+fn (kind Kind) is_assign() bool {
+	return kind in [
+		.a_add
+		.a_sub
+		.a_mul
+		.a_div
+		.a_mod
+		.assign
+	]
+}
+
+fn (kind Kind) assign_arith_type() Kind {
+	return match kind {
+		.a_add { .add }
+		.a_sub { .sub }
+		.a_mul { .mul }
+		.a_div { .div }
+		.a_mod { .mod }
+		else { panic("unreachable") }
+	}
+}
+
+fn (kind Kind) is_infix() bool {
+	return kind in [
+		.add,
+		.sub,
+		.mul,
+		.div,
+		.mod,
+		.a_add,
+		.a_sub,
+		.a_mul,
+		.a_div,
+		.a_mod,
+		.assign,
+		.eq,
+		.neq,
+		.gt,
+		.gte,
+		.lt,
+		.lte,
+		.l_and,
+		.l_or,
+		.l_not,
+		.b_and,
+		.b_or,
+		.b_xor,
+	//	.range,
+	//	.range_inc,
+		.dot,
+	]
 }

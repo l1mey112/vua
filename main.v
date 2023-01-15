@@ -1,13 +1,13 @@
 import internals
 
 fn main() {
-	mut l := internals.new_parser('function hello() return 20 + 20 > 5 end')
+	// mut p := internals.new_parser('function hello() return 20 + 20 > 5 end')
+	
+	src := 'path.to[in_var].hello + 2'
 
-	for {
-		mut t := l.get()
-		if t.kind == .eof {
-			break
-		}
-		println(t)
-	}
+	println("--- `${src}`")
+
+	mut p := internals.new_compiler(src)
+
+	p.expr(0)
 }
