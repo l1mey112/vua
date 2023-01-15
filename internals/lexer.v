@@ -1,14 +1,13 @@
-module lexer
+module internals
 
-pub struct Token {
+struct Token {
 pub:
 	loc  Loc
 	kind Kind
 	lit  string
 }
 
-pub struct Loc {
-pub:
+struct Loc {
 	column int
 	line_nr int
 	len int
@@ -16,7 +15,7 @@ pub:
 }
 
 pub struct Lexer {
-pub mut:
+mut:
 	src string
 	pos int
 	last_nl_pos int = -1
@@ -32,7 +31,7 @@ pub fn new_lexer_with_string(src string) Lexer {
 fn is_id(ch u8) bool { return (ch >= `a` && ch <= `z`) || (ch >= `A` && ch <= `Z`) || ch == `_` }
 
 fn (l Lexer) loc(len int) Loc {
-	comp_col := (l.pos - l.last_nl_pos) - len
+	comp_col := l.pos - l.last_nl_pos - len
 	return Loc {
 		column: if 1 > comp_col { 1 } else { comp_col }
 		line_nr: l.line_nr
@@ -94,25 +93,28 @@ pub fn (mut l Lexer) get() Token {
 				l.pos++
 			}
 
+			lit := l.src[start..l.pos]
+
 			return Token {
-				loc: l.loc(l.pos - start)
+				loc: l.loc(lit.len)
 				kind: .number
-				lit: l.src[start..l.pos]
+				lit: lit
 			}
 		} else {
+			start := l.pos
 			l1 := l.src[l.pos + 1] or { 0 }
 			l2 := l.src[l.pos + 2] or { 0 }
-
-			start := l.pos
 
 			l.pos++
 
 			op := match ch {
-				`(` { Kind.oparen }
-				`)` { Kind.cparen }
-				`{` { Kind.obrace }
-				`}` { Kind.cbrace }
-				`,` { Kind.comma  }
+				`(` { Kind.oparen  }
+				`)` { Kind.cparen  }
+				`{` { Kind.obrace  }
+				`}` { Kind.cbrace  }
+				`[` { Kind.osbrace }
+				`]` { Kind.csbrace }
+				`,` { Kind.comma   }
 				`+` { if l1 == `+` { l.pos++ Kind.inc   } else if l1 == `=` { l.pos++ Kind.a_add } else { Kind.add } }
 				`-` { if l1 == `-` { l.pos++ Kind.dec   } else { Kind.sub    } }
 				`*` { if l1 == `=` { l.pos++ Kind.a_mul } else { Kind.mul    } }

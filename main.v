@@ -1,7 +1,7 @@
-import lexer
+import internals
 
 fn main() {
-	mut l := lexer.new_lexer_with_string('function hello() return 20 + 20 > 5 end')
+	mut l := internals.new_parser('function hello() return 20 + 20 > 5 end')
 
 	for {
 		mut t := l.get()
