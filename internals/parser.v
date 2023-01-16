@@ -8,6 +8,7 @@ mut:
 	vstack   []&Cval
 	vreg     int
 	vreg_cap int
+	lbl      int
 }
 
 pub fn new_compiler(src string) Compiler {
@@ -109,12 +110,7 @@ pub fn (mut p Compiler) flush() {
 	}
 }
 
-fn (mut p Compiler) unwrap_cval(curr &Cval) Creg {
-	reg := match curr.v {
-		Creg { curr.v }
-		else { p.reg_alloc() }
-	}
-
+fn (mut p Compiler) unwrap_cval(curr &Cval, reg Creg) Creg {
 	match curr.v {
 		Cnum {
 			println("R${reg} = load ${curr.v}")
@@ -122,19 +118,31 @@ fn (mut p Compiler) unwrap_cval(curr &Cval) Creg {
 		Cident {
 			println("R${reg} = index _env['${curr.v}']")
 		}
-		Creg {}
+		Creg {
+			if curr.v != reg {
+				println("R${reg} = R${curr.v}")
+			}
+		}
 	}
 	p.unwrap_index_cval(curr.next, reg)
 
 	return reg
 }
 
-fn (mut p Compiler) unwrap_top_cval() Creg {
-	return p.unwrap_cval(p.vtop())
+fn (mut p Compiler) unwrap_pop_cval() Creg {
+	curr := p.vpop()
+
+	reg := match curr.v {
+		Creg { curr.v }
+		else { p.reg_alloc() }
+	}
+
+	p.unwrap_cval(curr, reg)
+	return reg
 }
 
-fn (mut p Compiler) unwrap_pop_cval() Creg {
-	return p.unwrap_cval(p.vpop())
+fn (mut p Compiler) unwrap_pop_cval_to(v Creg) {
+	p.unwrap_cval(p.vpop(), v)
 }
 
 pub fn (mut p Compiler) check_current(kind Kind, err string) {
@@ -171,6 +179,11 @@ pub fn (mut p Compiler) expr(precedence u8) {
 				println("R${lhs} = neg R${lhs}")
 				p.vpush(lhs)
 			}
+		}
+		.oparen {
+			p.next()
+			p.expr(0)
+			p.check(.cparen, "expected closing `)` to close paren expression")
 		}
 		else {
 			panic("unimplemented ${p.tok.kind}")
@@ -220,11 +233,28 @@ pub fn (mut p Compiler) expr(precedence u8) {
 			else {
 				if p.tok.kind.is_infix() {
 					op := p.tok.kind
+					is_short_circuit := op in [.l_and, .l_or]
 					prec := p.tok.kind.precedence()
-					lhs := p.unwrap_pop_cval()
 					p.next()
-					p.expr(prec)
-					mut rhs := p.unwrap_pop_cval()
+
+					lhs := p.unwrap_pop_cval()
+					
+					mut lbl := p.lbl
+					mut rhs := Creg(-1)
+					if is_short_circuit {
+						p.lbl++
+						typ := if op == .l_and { "false" } else { "true" }
+						println("cjmp R${lhs}, ${typ}, .LC${lbl}")
+						
+						if op == .l_or {
+							p.expr(prec)
+							p.unwrap_pop_cval_to(lbl)
+						}
+					}
+					if op != .l_or {
+						p.expr(prec)
+						rhs = p.unwrap_pop_cval()
+					}		
 
 					if op.is_assign() {
 						mut n_rhs := rhs
@@ -236,8 +266,12 @@ pub fn (mut p Compiler) expr(precedence u8) {
 							n_rhs = reg
 						}
 						println("store R${lhs}, R${n_rhs}")						
-					} else {
+					} else if op != .l_or {
 						println("R${lhs} = ${op} R${lhs}, R${rhs}")
+					}
+
+					if is_short_circuit {
+						println(".LC${lbl}:")
 					}
 
 					p.vpush(lhs)
