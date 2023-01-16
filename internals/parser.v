@@ -166,27 +166,34 @@ pub fn (mut p Compiler) expr(precedence u8) {
 			p.vpush(Cnum(p.tok.lit.i64()))
 			p.next()
 		}
-		.sub {
-			if p.peek.kind == .number {
-				p.next()
-				p.vpush(Cnum("-${p.tok.lit}".i64()))
-				p.next()
-			} else {
-				p.next()
-				p.expr(u8(Precedence.prefix))
-				
-				lhs := p.unwrap_pop_cval()
-				println("R${lhs} = neg R${lhs}")
-				p.vpush(lhs)
-			}
-		}
 		.oparen {
 			p.next()
 			p.expr(0)
 			p.check(.cparen, "expected closing `)` to close paren expression")
 		}
 		else {
-			panic("unimplemented ${p.tok.kind}")
+			if p.tok.kind.is_prefix() {
+				if p.tok.kind == .sub && p.peek.kind == .number {
+					p.next()
+					p.vpush(Cnum("-${p.tok.lit}".i64()))
+					p.next()
+				} else {
+					opcode := if p.tok.kind == .sub {
+						"neg"
+					} else {
+						p.tok.kind.str()
+					}
+
+					p.next()
+					p.expr(u8(Precedence.prefix))
+					
+					lhs := p.unwrap_pop_cval()
+					println("R${lhs} = ${opcode} R${lhs}")
+					p.vpush(lhs)
+				}
+			} else {
+				panic("unimplemented ${p.tok.kind}")
+			}
 		}
 	}
 	
@@ -233,7 +240,7 @@ pub fn (mut p Compiler) expr(precedence u8) {
 			else {
 				if p.tok.kind.is_infix() {
 					op := p.tok.kind
-					is_short_circuit := op in [.l_and, .l_or]
+					is_short_circuit := op in [.l_and, .l_or, .or_unwrap]
 					prec := p.tok.kind.precedence()
 					p.next()
 
@@ -243,15 +250,19 @@ pub fn (mut p Compiler) expr(precedence u8) {
 					mut rhs := Creg(-1)
 					if is_short_circuit {
 						p.lbl++
-						typ := if op == .l_and { "false" } else { "true" }
-						println("cjmp R${lhs}, ${typ}, .LC${lbl}")
+						if op != .or_unwrap {
+							typ := if op == .l_and { "false" } else { "true" }
+							println("cjmp R${lhs}, ${typ}, .LC${lbl}")
+						} else {
+							println("unwrap R${lhs}, .LC${lbl}")
+						}
 						
-						if op == .l_or {
+						if op in [.l_or, .or_unwrap] {
 							p.expr(prec)
 							p.unwrap_pop_cval_to(lbl)
 						}
 					}
-					if op != .l_or {
+					if op !in [.l_or, .or_unwrap] {
 						p.expr(prec)
 						rhs = p.unwrap_pop_cval()
 					}		
@@ -266,7 +277,7 @@ pub fn (mut p Compiler) expr(precedence u8) {
 							n_rhs = reg
 						}
 						println("store R${lhs}, R${n_rhs}")						
-					} else if op != .l_or {
+					} else if op !in [.l_or, .or_unwrap] {
 						println("R${lhs} = ${op} R${lhs}, R${rhs}")
 					}
 

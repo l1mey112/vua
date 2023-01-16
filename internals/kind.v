@@ -39,8 +39,8 @@ pub enum Kind {
 	b_or      // |
 	b_xor     // ^
 	b_not     // ~
-//	range     // ..
-//	range_inc // ..=
+	range     // ..
+	range_inc // ..=
 	or_unwrap // or
 	dot       // .
 
@@ -56,7 +56,7 @@ pub enum Kind {
 enum Precedence as u8 {
 	lowest
 	assign   // = += -= *= /= %=
-//	range    // .. ..=
+	range    // .. ..=
 	l_or     // ||
 	l_and    // &&
 	eq       // == != < <= > >=
@@ -67,14 +67,14 @@ enum Precedence as u8 {
 	factor   // * / %
 	prefix   // -x !x
 	postfix  // ++ --
-	// unwrap   // or
+	unwrap   // or
 	call     // . x() x[]
 }
 
 fn (kind Kind) precedence() u8 {
 	v := match kind {
 		.assign, .a_add, .a_sub, .a_mul, .a_mod { Precedence.assign }
-	//	.range, .range_inc { Precedence.range }
+		.range, .range_inc { Precedence.range }
 		.l_or { Precedence.l_or }
 		.l_and { Precedence.l_and }
 		.eq, .neq, .gt, .gte, .lt, .lte { Precedence.eq }
@@ -84,7 +84,7 @@ fn (kind Kind) precedence() u8 {
 		.add, .sub { Precedence.sum }
 		.mul, .div, .mod { Precedence.factor }
 		.inc, .dec { Precedence.postfix }		
-		// .or_unwrap { Precedence.unwrap }
+		.or_unwrap { Precedence.unwrap }
 		.dot, .osbrace { Precedence.call }
 		else { Precedence.lowest }
 	}
@@ -114,6 +114,14 @@ fn (kind Kind) to_assign_arith() Kind {
 	}
 }
 
+fn (kind Kind) is_prefix() bool {
+	return kind in [
+		.sub,
+		.l_not,
+		.b_not,
+	]
+}
+
 fn (kind Kind) is_infix() bool {
 	return kind in [
 		.add,
@@ -139,8 +147,9 @@ fn (kind Kind) is_infix() bool {
 		.b_and,
 		.b_or,
 		.b_xor,
-	//	.range,
-	//	.range_inc,
+		.range,
+		.range_inc,
 		.dot,
+		.or_unwrap,
 	]
 }

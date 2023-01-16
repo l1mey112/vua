@@ -7,7 +7,8 @@ fn main() {
 	// src := 'hello = -hello.name++ + 2'
 	// src := 'hello = -2[2]'
 	// src := 'hello = -(2)[2]'
-	src := '15 && 10 + 2'
+	// src := '15 && 10 + 2'
+	src := '10 or (22 + 2)'
 
 	println("--- `${src}`")
 
