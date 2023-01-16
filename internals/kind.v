@@ -94,16 +94,16 @@ fn (kind Kind) precedence() u8 {
 
 fn (kind Kind) is_assign() bool {
 	return kind in [
-		.a_add
-		.a_sub
-		.a_mul
-		.a_div
-		.a_mod
-		.assign
+		.a_add,
+		.a_sub,
+		.a_mul,
+		.a_div,
+		.a_mod,
+		.assign,
 	]
 }
 
-fn (kind Kind) assign_arith_type() Kind {
+fn (kind Kind) to_assign_arith() Kind {
 	return match kind {
 		.a_add { .add }
 		.a_sub { .sub }
