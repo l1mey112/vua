@@ -128,6 +128,10 @@ pub fn (mut p Compiler) expr(precedence u8)! {
 				if p.tok.kind.is_infix() {
 					op := p.tok.kind
 					is_short_circuit := op in [.l_and, .l_or, .or_unwrap]
+					if op == .or_unwrap {
+						return error(p.error_str(p.tok, "`or` unwrapping or the `err` type are not implemented, they are WIP"))
+					}
+
 					prec := p.tok.kind.precedence()
 					p.next()!
 

@@ -28,23 +28,28 @@ fn (mut p Compiler) next()! {
 	p.peek = p.l.get()!
 }
 
-type Creg   = int
-type Cnum   = i64
-type Cident = string
-type Ctype  = Creg | Cnum | Cident
+pub type Creg   = int
+pub type Cnum   = i64
+pub type Cident = string
+pub type Ctype  = Creg | Cnum | Cident
 
-/* fn (typ Ctype) str() string {
+fn (typ Ctype) ctype_to_str() string {
 	return match typ {
 		Creg   { "R${typ}" }
 		Cnum   { "${typ}" }
 		Cident { "'${typ}'" }
 	}
-} */
+}
+
+fn (typ Ctype) str() string {
+	return typ.ctype_to_str()
+}
 
 [heap]
-struct Cval {
+pub struct Cval {
+pub:
 	v    Ctype
-mut:
+pub mut:
 	next &Cval = unsafe { nil }
 }
 
@@ -77,6 +82,7 @@ fn (mut p Compiler) reg_alloc() Creg {
 	if p.vreg > p.vreg_cap {
 		p.vreg_cap = p.vreg
 	}
+	assert p.vreg <= u16_max
 	return Creg(v)
 }
 
