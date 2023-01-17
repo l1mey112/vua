@@ -47,7 +47,11 @@ pub enum Kind {
 	function  // function
 	end       // end
 	ret       // return
-
+	do        // do
+	/* nil       // nil
+	true      // true
+	false     // false
+ */
 	eof
 }
 
@@ -85,7 +89,7 @@ fn (kind Kind) precedence() u8 {
 		.mul, .div, .mod { Precedence.factor }
 		.inc, .dec { Precedence.postfix }		
 		.or_unwrap { Precedence.unwrap }
-		.dot, .osbrace { Precedence.call }
+		.dot, .osbrace, .oparen { Precedence.call }
 		else { Precedence.lowest }
 	}
 	

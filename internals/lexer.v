@@ -18,7 +18,7 @@ pub struct Lexer {
 mut:
 	src string
 	pos int
-	last_nl_pos int = -1
+	last_nl_pos int
 	line_nr int
 }
 
@@ -33,14 +33,14 @@ fn is_id(ch u8) bool { return (ch >= `a` && ch <= `z`) || (ch >= `A` && ch <= `Z
 fn (l Lexer) loc(len int) Loc {
 	comp_col := l.pos - l.last_nl_pos - len
 	return Loc {
-		column: if 1 > comp_col { 1 } else { comp_col }
+		column: comp_col
 		line_nr: l.line_nr
 		len: len
 		pos: l.pos - len
 	}
 }
 
-pub fn (mut l Lexer) get() Token {
+pub fn (mut l Lexer) get()! Token {
 	for l.pos < l.src.len {
 		mut ch := l.src[l.pos]
 		
@@ -72,6 +72,7 @@ pub fn (mut l Lexer) get() Token {
 				'function' { Kind.function  }
 				'end'      { Kind.end       }
 				'return'   { Kind.ret       }
+				'do'       { Kind.do        }
 				else       { Kind.ident     }
 			}
 			return Token {
@@ -86,7 +87,7 @@ pub fn (mut l Lexer) get() Token {
 				c := l.src[l.pos]
 				if !c.is_digit() {
 					if is_id(c) {
-						panic("unsuitable character in integer")
+						return error("unsuitable character in integer")
 					}
 					break
 				}
@@ -104,6 +105,17 @@ pub fn (mut l Lexer) get() Token {
 			start := l.pos
 			l1 := l.src[l.pos + 1] or { 0 }
 			l2 := l.src[l.pos + 2] or { 0 }
+
+			if ch == `/` && l1 == `/` {
+				for {
+					l.pos++
+					if l.pos >= l.src.len || l.src[l.pos] == `\n` {
+						break
+					}
+				}
+				l.pos++
+				continue
+			}
 
 			l.pos++
 
@@ -130,7 +142,7 @@ pub fn (mut l Lexer) get() Token {
 				`~` { Kind.b_not }
 				`^` { Kind.b_xor }
 				else {
-					panic("unknown character ${ch.ascii_str()}")
+					return error("unknown character ${ch.ascii_str()}")
 				}
 			}
 
