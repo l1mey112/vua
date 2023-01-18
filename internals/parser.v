@@ -9,9 +9,10 @@ mut:
 	prev     Token
 	vstack   []&Cval
 	vreg     int
-	vreg_cap int
 	lbl      int
 pub mut:
+	vreg_cap int
+	vm       &VM = &VM{}
 	code_ret strings.Builder = strings.new_builder(40)
 }
 
@@ -106,16 +107,11 @@ fn (mut p Compiler) unwrap_index_cval(curr &Cval, reg Creg) {
 		return
 	}
 
-	// root value
-	match curr.v {
-		Cnum { p.writeln("R${reg} = load ${curr.v}") }
-		Cident { p.writeln("R${reg} = index _scope['${curr.v}']") }
-		Creg {
-			if curr.v != reg {
-				p.writeln("R${reg} = R${curr.v}")
-			}
-		}
+	if curr.v is Creg && (curr.v as Creg) == reg {
+		return
 	}
+
+	p.vm.encode_load(reg, curr)
 }
 
 pub fn (mut p Compiler) flush() {
@@ -157,7 +153,7 @@ fn (mut p Compiler) check(kind Kind, err string)! {
 	p.next()!
 }
 
-pub fn (mut p Compiler) all()! {
+pub fn (mut p Compiler) compile()! {
 	p.next()!
 	p.next()!
 	for p.tok.kind != .eof {

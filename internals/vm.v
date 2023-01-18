@@ -40,7 +40,7 @@ pub enum Opcode as u8 {
 // [ u8 ] [  u16  ] [  u16  ]
 // ^op    ^dest     ^reg a
 // 
-// op & 0b10000000 == `reg b` is constant pool
+// op & 0b10000000 == `reg a` is constant pool
 
 // --- load, store
 // 
@@ -49,16 +49,25 @@ pub enum Opcode as u8 {
 // 
 // op & 0b10000000 == `src` is constant pool
 
-fn (kind Kind) to_opcode() Opcode {
+fn (kind Kind) infix_to_opcode() Opcode {
 	return match kind {
 		.add { Opcode.add }
 		.sub { Opcode.sub }
+		.mul { Opcode.mul }
 		.div { Opcode.div }
 		.mod { Opcode.mod }
 		.b_or  { Opcode.bor }
 		.b_and { Opcode.and }
 		.b_xor { Opcode.xor }
-		else { panic("Kind.to_opcode: kind `${kind}` not implemented") }
+		else { panic("Kind.infix_to_opcode: kind `${kind}` not implemented") }
+	}
+}
+
+fn (kind Kind) unary_to_opcode() Opcode {
+	return match kind {
+		.sub   { Opcode.neg }
+		.b_not { Opcode.not }
+		else { panic("Kind.unary_to_opcode: kind `${kind}` not implemented") }
 	}
 }
 
@@ -100,16 +109,7 @@ fn (mut v VM) const_pool_append(val Cval) u16 {
 	return idx
 }
 
-pub fn (mut v VM) encode_infix(typ Opcode, dest Creg, a Creg, b &Cval) {
-	assert b.v is Cnum || b.v is Creg /* || b.v is Cstr */
-	assert isnil(b.next)
-
-	opidx := v.code.len
-	v.a8(u8(typ))
-
-	// TODO: duplicate code
-	v.a16(u8(dest))
-	v.a16(u8(a))
+pub fn (mut v VM) encode_overloaded_operand(opidx int, b Cval) {
 	if b.v is Creg {
 		v.a16(u8(b.v))		
 	} else {
@@ -118,36 +118,43 @@ pub fn (mut v VM) encode_infix(typ Opcode, dest Creg, a Creg, b &Cval) {
 	}
 }
 
-pub fn (mut v VM) encode_load(dest Creg, src &Cval) {
+pub fn (mut v VM) encode_infix(typ Opcode, dest Creg, a Creg, b Cval) {
+	assert b.v is Cnum || b.v is Creg /* || b.v is Cstr */
+	assert isnil(b.next)
+
+	opidx := v.code.len
+	v.a8(u8(typ))
+	v.a16(u8(dest))
+	v.a16(u8(a))
+	v.encode_overloaded_operand(opidx, b)
+}
+
+pub fn (mut v VM) encode_unary(typ Opcode, dest Creg, a Cval) {
+	assert a.v is Cnum || a.v is Creg /* || b.v is Cstr */
+	assert isnil(a.next)
+
+	opidx := v.code.len
+	v.a8(u8(typ))
+	v.a16(u8(dest))
+	v.encode_overloaded_operand(opidx, a)
+}
+
+pub fn (mut v VM) encode_load(dest Creg, src Cval) {
 	assert src.v is Cnum || src.v is Creg /* || src.v is Cstr */
 	
 	opidx := v.code.len
 	v.a8(u8(Opcode.load))
-
-	// TODO: duplicate code
 	v.a16(u8(dest))
-	if src.v is Creg {
-		v.a16(u8(src.v))		
-	} else {
-		v.code[opidx] |= cp_mask
-		v.a16(v.const_pool_append(src))
-	}
+	v.encode_overloaded_operand(opidx, src)
 }
 
-pub fn (mut v VM) encode_store(dest Creg, src &Cval) {
+pub fn (mut v VM) encode_store(dest Creg, src Cval) {
 	assert src.v is Cnum || src.v is Creg /* || src.v is Cstr */
 	
 	opidx := v.code.len
 	v.a8(u8(Opcode.store))
-
-	// TODO: duplicate code
 	v.a16(u8(dest))
-	if src.v is Creg {
-		v.a16(u8(src.v))		
-	} else {
-		v.code[opidx] |= cp_mask
-		v.a16(v.const_pool_append(src))
-	}
+	v.encode_overloaded_operand(opidx, src)
 }
 
 struct OpcodeParser {
@@ -209,8 +216,14 @@ pub fn (v &VM) disassemble() string {
 					'R${dest} = ${op} R${src}'
 				}
 			}
-			/* .neg {  }
-			.not {  } */
+			.neg, .not {
+				dest, src := p.read_2_u16()
+				if is_cp {
+					'R${dest} = ${op} ${v.constant_pool[src]}'
+				} else {
+					'R${dest} = ${op} R${src}'
+				} 
+			}
 			else { panic("VM.disassemble: operator `${op}` unimplemented") }
 		}
 

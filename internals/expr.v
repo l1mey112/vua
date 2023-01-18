@@ -24,24 +24,20 @@ pub fn (mut p Compiler) expr(precedence u8)! {
 					p.vpush(Cnum("-${p.tok.lit}".i64()))
 					p.next()!
 				} else {
-					opcode := if p.tok.kind == .sub {
-						"neg"
-					} else {
-						p.tok.kind.str()
-					}
+					opcode := p.tok.kind.unary_to_opcode()
 
 					p.next()!
 					p.expr(u8(Precedence.prefix))!
 					
 					lhs := p.unwrap_pop_cval()
-					p.writeln("R${lhs} = ${opcode} R${lhs}")
+					p.vm.encode_unary(opcode, lhs, Cval{v: Creg(lhs)})
 					p.vpush(lhs)
 				}
 			} else {
 				estr := if p.tok.kind != .eof {
 					"unexpected `${p.tok.kind}`"
 				} else {
-					"unexpected end of source code/file"
+					"unexpected end of file"
 				}
 				return error(p.error_str(p.tok, estr))
 			}
@@ -127,6 +123,7 @@ pub fn (mut p Compiler) expr(precedence u8)! {
 			else {
 				if p.tok.kind.is_infix() {
 					op := p.tok.kind
+					
 					is_short_circuit := op in [.l_and, .l_or, .or_unwrap]
 					if op == .or_unwrap {
 						return error(p.error_str(p.tok, "`or` unwrapping or the `err` type are not implemented, they are WIP"))
@@ -162,14 +159,17 @@ pub fn (mut p Compiler) expr(precedence u8)! {
 						mut n_rhs := rhs
 						if op != .assign {
 							reg := p.reg_alloc()
-							p.writeln("R${reg} = ${op.to_assign_arith()} R${lhs}, R${rhs}")
+							opcode := op.to_assign_arith().infix_to_opcode()
+							p.vm.encode_infix(opcode, reg, lhs, Cval{v: Creg(rhs)})
 
 							p.reg_free(reg)
 							n_rhs = reg
 						}
-						p.writeln("store R${lhs}, R${n_rhs}")						
+
+						p.writeln("store R${lhs}, R${n_rhs}")
 					} else if op !in [.l_or, .or_unwrap] {
-						p.writeln("R${lhs} = ${op} R${lhs}, R${rhs}")
+						opcode := op.infix_to_opcode()
+						p.vm.encode_infix(opcode, lhs, lhs, Cval{v: Creg(rhs)})
 					}
 
 					if is_short_circuit {
