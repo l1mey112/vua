@@ -3,7 +3,7 @@ module internals
 import encoding.binary as bin
 import strings
 
-const u16_max = 65535
+const u16_max = 0xFFFF
 const cp_mask = 0b10000000
 
 // 
@@ -24,6 +24,7 @@ pub enum Opcode as u8 {
 	not // ~R
 	_prefix_end_
 	load  // load R, R
+	index // index env['value']
 	store // store R, R
 	_special_end_
 }
@@ -42,12 +43,38 @@ pub enum Opcode as u8 {
 // 
 // op & 0b10000000 == `reg a` is constant pool
 
-// --- load, store
+// --- load (load register or constant)
+//  R0 = load R1
+//  R0 = load 20
 // 
 // [ u8 ] [  u16  ] [  u16  ]
 // ^op    ^dest     ^src
 // 
 // op & 0b10000000 == `src` is constant pool
+
+// --- index (index the current enviroment or register, by a string literal or register)
+//  R0 = index env['hello']
+//  R0 = index R0['hello']
+//  R0 = index R0[R0]
+// 
+// [ u8 ] [  u16  ] [  u16  ] [  u16  ]
+// ^op    ^dest     ^src      ^index
+// 
+// src == 0xFFFF   == `src` is current enviroment, else register
+// op & 0b10000000 == `index` is constant pool, else registers
+
+// UNUSED, NOT IMPLEMENTED
+// 
+// 
+/* // --- store (store to upvalue)
+//  env['hello'] = store 20
+//  R0['child'] = store nil 
+// 
+// [ u8 ] [  u16  ] [  u16  ] [  u16  ]
+// ^op    ^base     ^upval    ^src
+// 
+// op & 0b10000000 == `base` is current enviroment, else register
+*/
 
 fn (kind Kind) infix_to_opcode() Opcode {
 	return match kind {
@@ -100,7 +127,8 @@ fn (mut v VM) const_pool_append(val Cval) u16 {
 	idx := u16(v.constant_pool.len)
 
 	v.constant_pool << match val.v {
-		Cnum { VNum(val.v) }
+		Cnum   { VValue(VNum(val.v)) }
+		Cident { VValue(VStr(val.v)) }
 		else { panic("unreachable") }
 	}
 
@@ -111,7 +139,7 @@ fn (mut v VM) const_pool_append(val Cval) u16 {
 
 pub fn (mut v VM) encode_overloaded_operand(opidx int, b Cval) {
 	if b.v is Creg {
-		v.a16(u8(b.v))		
+		v.a16(b.v)		
 	} else {
 		v.code[opidx] |= cp_mask
 		v.a16(v.const_pool_append(b))
@@ -124,7 +152,7 @@ pub fn (mut v VM) encode_infix(typ Opcode, dest Creg, a Creg, b Cval) {
 
 	opidx := v.code.len
 	v.a8(u8(typ))
-	v.a16(u8(dest))
+	v.a16(dest)
 	v.a16(u8(a))
 	v.encode_overloaded_operand(opidx, b)
 }
@@ -135,16 +163,33 @@ pub fn (mut v VM) encode_unary(typ Opcode, dest Creg, a Cval) {
 
 	opidx := v.code.len
 	v.a8(u8(typ))
-	v.a16(u8(dest))
+	v.a16(dest)
 	v.encode_overloaded_operand(opidx, a)
 }
 
+pub fn (mut v VM) encode_index(dest Creg, src Creg, index Cval, is_env bool) {
+	assert index.v is Cident || index.v is Creg
+
+	opidx := v.code.len
+	v.a8(u8(Opcode.index))
+	v.a16(dest)
+
+	if is_env {
+		v.a16(u16_max)
+	} else {
+		v.a16(src)
+	}
+	
+	v.encode_overloaded_operand(opidx, index)
+}
+
+
 pub fn (mut v VM) encode_load(dest Creg, src Cval) {
-	assert src.v is Cnum || src.v is Creg /* || src.v is Cstr */
+	// assert src.v is Cnum || src.v is Creg /* || src.v is Cstr */
 	
 	opidx := v.code.len
 	v.a8(u8(Opcode.load))
-	v.a16(u8(dest))
+	v.a16(dest)
 	v.encode_overloaded_operand(opidx, src)
 }
 
@@ -153,7 +198,7 @@ pub fn (mut v VM) encode_store(dest Creg, src Cval) {
 	
 	opidx := v.code.len
 	v.a8(u8(Opcode.store))
-	v.a16(u8(dest))
+	v.a16(dest)
 	v.encode_overloaded_operand(opidx, src)
 }
 
@@ -216,6 +261,21 @@ pub fn (v &VM) disassemble() string {
 					'R${dest} = ${op} R${src}'
 				}
 			}
+			.index {
+				dest, src, index := p.read_3_u16()
+				
+				src_str := if src == u16_max {
+					'env'
+				} else {
+					'R${src}'
+				}
+
+				if is_cp {
+					'R${dest} = index ${src_str}[${v.constant_pool[index]}]'
+				} else {
+					'R${dest} = index ${src_str}[R${index}]'
+				}
+			}
 			.neg, .not {
 				dest, src := p.read_2_u16()
 				if is_cp {
@@ -239,10 +299,10 @@ pub fn (v &VM) disassemble() string {
 	return sb_out.str()
 }
 
-pub fn (mut v VM) execute(reg_cap int) ![]VValue {
+pub fn (mut v VM) execute(reg_cap int, mut env Enviroment) ![]VValue {
 	mut p := OpcodeParser{v: v}
 
-	mut regs := []VValue{len: reg_cap, init: Nil{}}
+	mut regs := []VValue{len: reg_cap, init: VNil{}}
 
 	for p.ip < v.code.len {
 		op, is_cp := p.read_op()
@@ -257,6 +317,29 @@ pub fn (mut v VM) execute(reg_cap int) ![]VValue {
 			n_src := if is_cp { v.constant_pool[src] } else { regs[src] }
 
 			regs[dest] = n_src
+		} else if op == .index {
+			dest, src, index := p.read_3_u16()
+			
+			lhs := if is_cp {
+				v.constant_pool[index]
+			} else {
+				regs[index]
+			}
+			if lhs !is VStr {
+				return error('indexing[] by anything other than a \'string\' is not implemented')
+			}
+			index_val := lhs as VStr
+
+			if src == u16_max {
+				regs[dest] = env.get(index_val)
+			} else {
+				rval := regs[src]
+				if rval !is VTable {
+					return error('cannot index values that are not tables')
+				}
+
+				regs[dest] = (rval as VTable)[index_val] or { panic("unreachable") }
+			}
 		} else {
 			panic("VM.execute: operator `${op}` unimplemented")
 		}

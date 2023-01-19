@@ -1,21 +1,54 @@
 module internals
 
-type VTableTyp = map[string]&VTable
+/* [heap]
+pub struct VTable {
+__global:
+	val VValue
+} */
 
-struct Nil {}
+pub type VTable = map[string]VValue
+pub struct VNil {}
+pub type VNum   = i64
+pub type VStr   = string
+pub type VValue = VTable | VStr | VNum | VNil
 
-[heap]
-struct VTable {
-	ptr VTableTyp
+fn new_vtable() VTable {
+	return map[string]VValue{}
 }
 
-type VNum   = i64
-type VValue = VNum | VTable | Nil
+pub struct Enviroment {
+mut:
+	global VTable
+	stack []VTable
+}
+
+pub fn (mut env Enviroment) assign_global(k string, v VValue) {
+	env.global[k] = v
+}
+
+pub fn (mut env Enviroment) get(name string) VValue {
+	mut idx := env.stack.len
+	if idx != 0 {
+		for {
+			idx--
+			if v := env.stack[idx][name] {
+				return v
+			}
+
+			if idx == 0 { break }
+		}
+	}
+
+	return env.global[name] or {
+		VNil{}
+	}
+}
 
 fn (typ VValue) vvalue_to_str() string {
 	return match typ {
 		VNum { "${typ}" }
-		Nil  { "nil" }
+		VNil  { "nil" }
+		VStr { "'${typ}'" }
 		else { typ.str() }
 	}
 }

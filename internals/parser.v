@@ -98,12 +98,7 @@ fn (mut p Compiler) unwrap_index_cval(curr &Cval, reg Creg) {
 	if !isnil(curr.next) {
 		p.unwrap_index_cval(curr.next, reg)
 		
-		// index chain
-		match curr.v {
-			Cnum   { p.writeln("R${reg} = index R${reg}[${curr.v}]")   }
-			Cident { p.writeln("R${reg} = index R${reg}['${curr.v}']") }
-			Creg   { p.writeln("R${reg} = index R${reg}[R${curr.v}]")  }
-		}
+		p.vm.encode_index(reg, reg, curr, false)
 		return
 	}
 
@@ -111,7 +106,11 @@ fn (mut p Compiler) unwrap_index_cval(curr &Cval, reg Creg) {
 		return
 	}
 
-	p.vm.encode_load(reg, curr)
+	if curr.v is Cident {
+		p.vm.encode_index(reg, -1, curr, true)
+	} else {
+		p.vm.encode_load(reg, curr)
+	}
 }
 
 pub fn (mut p Compiler) flush() {

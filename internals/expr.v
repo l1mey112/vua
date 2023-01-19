@@ -47,9 +47,6 @@ pub fn (mut p Compiler) expr(precedence u8)! {
 	for precedence < p.tok.kind.precedence() {
 		match p.tok.kind {
 			.dot, .osbrace {
-				if p.prev.loc.line_nr != p.tok.loc.line_nr {
-					break
-				}
 				mut curr := p.vpop()
 
 				is_osbrace := p.tok.kind == .osbrace

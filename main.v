@@ -1,43 +1,27 @@
-import internals { Creg, Cnum, Cval }
+import internals { VNum, Enviroment }
 
 fn main() {
-	// mut p := internals.new_parser('function hello() return 20 + 20 > 5 end')
-	
-	// src := 'path.to[in_var].hello + 2'
-	// src := 'hello = -hello.name++ + 2'
-	// src := 'hello = -2[2]'
-	// src := 'hello = -(2)[2]'
-	// src := '15 && 10 + 2'
-	// src := 'hello or (2 + 2)'
+	// source code
+	src := 'hello + 2'
+	println('source code = `${src}`\n')
 
-	/* src := '10 + 15 * 2'
-	println("--- `${src}`")
-
+	// create a new compiler and compile bytecode
 	mut p := internals.new_compiler(src)
-	p.all() or { eprintln(err) exit(1) } */
-
-	/* mut vm := internals.VM{}
-	vm.encode_load(Creg(0), &Cval{v: Cnum(10)})
-	vm.encode_load(Creg(1), &Cval{v: Cnum(15)})
-	vm.encode_load(Creg(2), &Cval{v: Cnum(2)})
-	vm.encode_infix(.mul, Creg(1), Creg(1), &Cval{v: Creg(2)})
-	vm.encode_infix(.add, Creg(0), Creg(0), &Cval{v: Creg(1)})
-
-	str := vm.disassemble()
-	println(str)
-	state := vm.execute(3) or { eprintln(err) exit(1) }
-
-	println(state[0]) */
-
-	src := '10 + 15 * 2'
-	mut p := internals.new_compiler(src)
-
 	p.compile() or { eprintln(err) exit(1) }
 
+	// disassemble bytecode and print it out
 	str := p.vm.disassemble()
 	println(str)
-	state := p.vm.execute(p.vreg_cap) or { eprintln(err) exit(1) }
 
-	println(state)
+	// create a new 'global execution enviroment'
+	// global variables can be assigned here
+	mut env := Enviroment{}
+	// create a global variable 'hello' with the integer value 120
+	env.assign_global('hello', VNum(120))
+	
+	// execute the virtual machine with allotted registers and the enviroment
+	state := p.vm.execute(p.vreg_cap, mut env) or { eprintln(err) exit(1) }
+
+	// print the value of `R0`
 	println(state[0])
 }
